@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 import os
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 load_dotenv()
 
@@ -17,6 +19,13 @@ templates = Jinja2Templates(directory="templates")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel('gemini-2.0-flash')
 
+# Configure Selenium
+chrome_options = Options()
+chrome_options.add_argument("--headless")  # Run Chrome in headless mode
+driver = webdriver.Chrome(options=chrome_options)
+
+
+
 class Agent:
     def __init__(self, name, description):
         self.name = name
@@ -25,11 +34,13 @@ class Agent:
     def analyze(self, url):
         raise NotImplementedError
 
+
 class KeywordResearchAgent(Agent):
     def analyze(self, url):
         prompt = f"Find relevant keywords for the following URL: {url}"
         response = model.generate_content(prompt)
         return response.text
+
 
 class OnPageOptimizationAgent(Agent):
     def analyze(self, url):
@@ -37,12 +48,14 @@ class OnPageOptimizationAgent(Agent):
             response = requests.get(url)
             soup = BeautifulSoup(response.content, "html.parser")
             title = soup.find('title').text if soup.find('title') else 'No title found'
-            description = soup.find('meta', attrs={'name':'description'})['content'] if soup.find('meta', attrs={'name':'description'}) else 'No description found'
+            description = soup.find('meta', attrs={'name': 'description'})['content'] if soup.find('meta', attrs={
+                'name': 'description'}) else 'No description found'
             prompt = f"Analyze the following title: {title} and description: {description} for SEO."
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
             return f"Error analyzing on-page elements: {e}"
+
 
 class ContentAnalysisAgent(Agent):
     def analyze(self, url):
@@ -57,23 +70,94 @@ class ContentAnalysisAgent(Agent):
         except Exception as e:
             return f"Error analyzing content: {e}"
 
+
 class TechnicalSEOAgent(Agent):
     def analyze(self, url):
-        # Placeholder for technical SEO analysis
-        # (e.g., check site speed, mobile-friendliness, SSL certificate)
-        # This would require more complex checks using external libraries or APIs
-        return "Technical SEO analysis is not yet implemented."
+        try:
+            # Use Selenium to get the page source (for JavaScript rendering)
+            driver.get(url)
+            html_content = driver.page_source
+            soup = BeautifulSoup(html_content, "html.parser")
+
+            # Check for SSL certificate
+            ssl_certificate = "Present" if url.startswith("https://") else "Not present"
+
+            # Check for mobile-friendliness (basic check using viewport meta tag)
+            viewport_meta = soup.find('meta', attrs={'name': 'viewport'})
+            mobile_friendly = "Yes" if viewport_meta else "No"
+
+            # Check for sitemap.xml
+            sitemap_url = f"{url.rstrip('/')}/sitemap.xml"
+            sitemap_response = requests.get(sitemap_url)
+            sitemap_present = "Present" if sitemap_response.status_code == 200 else "Not present"
+
+            # Check for broken links
+            broken_links = []
+            for link in soup.find_all('a'):
+                href = link.get('href')
+                if href and href.startswith('http'):
+                    try:
+                        response = requests.get(href)
+                        if response.status_code != 200:
+                            broken_links.append(href)
+                    except requests.exceptions.RequestException:
+                        broken_links.append(href)
+
+            # Check for page speed (using Selenium to get performance timings)
+            navigation_start = driver.execute_script("return window.performance.timing.navigationStart")
+            dom_complete = driver.execute_script("return window.performance.timing.domComplete")
+            load_time = dom_complete - navigation_start
+            page_speed_score = "Good" if load_time < 3000 else "Needs improvement"
+
+            # Construct the prompt for Gemini
+            prompt = f"""
+                        Analyze the following technical SEO aspects of a website:
+
+                        * SSL Certificate: {ssl_certificate}
+                        * Mobile-friendly: {mobile_friendly}
+                        * Sitemap: {sitemap_present}
+                        * Broken Links: {broken_links}
+                        * Page Speed Score: {page_speed_score} (Load time: {load_time} ms)
+
+                        Provide recommendations for improvement.
+                        """
+            response = model.generate_content(prompt)
+            return response.text
+
+        except Exception as e:
+            return f"Error analyzing technical SEO: {e}"
+
 
 class LinkBuildingAgent(Agent):
     def analyze(self, url):
-        # Placeholder for link building analysis
-        # (e.g., suggest link building strategies based on website content)
-        # This would require more advanced analysis and potentially external data sources
-        return "Link building analysis is not yet implemented."
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, "html.parser")
+
+            # Extract relevant content for analysis (e.g., title, headings, keywords)
+            title = soup.find('title').text if soup.find('title') else ""
+            headings = [h.get_text(strip=True) for h in soup.find_all(['h1', 'h2', 'h3'])]
+            # You might need to use the KeywordResearchAgent here to get relevant keywords
+
+            # Construct the prompt for Gemini
+            prompt = f"""
+                    Suggest link building strategies for a website with the following characteristics:
+
+                    * Title: {title}
+                    * Headings: {headings}
+                    * URL: {url}
+                    """
+            response = model.generate_content(prompt)
+            return response.text
+
+        except Exception as e:
+            return f"Error analyzing link building opportunities: {e}"
+
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
 
 @app.post("/analyze_seo")
 async def analyze_seo(request: Request, url: str = Form(...)):
@@ -107,6 +191,7 @@ async def analyze_seo(request: Request, url: str = Form(...)):
     """
 
     return templates.TemplateResponse("index.html", {"request": request, "report": report, "url": url})
+
 
 # templates/index.html (basic form and report display)
 """
