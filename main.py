@@ -9,6 +9,11 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
 
 load_dotenv()
 
@@ -19,12 +24,12 @@ templates = Jinja2Templates(directory="templates")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel('gemini-2.0-flash')
 
+'''
 # Configure Selenium
 chrome_options = Options()
 chrome_options.add_argument("--headless")  # Run Chrome in headless mode
 driver = webdriver.Chrome(options=chrome_options)
-
-
+'''
 
 class Agent:
     def __init__(self, name, description):
@@ -73,6 +78,7 @@ class ContentAnalysisAgent(Agent):
 
 class TechnicalSEOAgent(Agent):
     def analyze(self, url):
+        '''
         try:
             # Use Selenium to get the page source (for JavaScript rendering)
             driver.get(url)
@@ -109,6 +115,19 @@ class TechnicalSEOAgent(Agent):
             load_time = dom_complete - navigation_start
             page_speed_score = "Good" if load_time < 3000 else "Needs improvement"
 
+            # Example: Interacting with a button (if present)
+            try:
+                button = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "button"))
+                )
+                button.click()
+                time.sleep(2)  # Allow time for dynamic content to load.
+            except:
+                pass
+
+            # Example: Checking for specific elements
+            element_present = "Yes" if soup.find(id="some-element") else "No"
+
             # Construct the prompt for Gemini
             prompt = f"""
                         Analyze the following technical SEO aspects of a website:
@@ -126,6 +145,8 @@ class TechnicalSEOAgent(Agent):
 
         except Exception as e:
             return f"Error analyzing technical SEO: {e}"
+            '''
+        return "Link building analysis is not yet implemented."
 
 
 class LinkBuildingAgent(Agent):
@@ -191,31 +212,3 @@ async def analyze_seo(request: Request, url: str = Form(...)):
     """
 
     return templates.TemplateResponse("index.html", {"request": request, "report": report, "url": url})
-
-
-# templates/index.html (basic form and report display)
-"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Multi-Agent SEO Agency</title>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <div class="container">
-        <h1>Multi-Agent SEO Agency</h1>
-        <form method="post" action="/analyze_seo">
-            <input type="url" name="url" placeholder="Enter URL to analyze" required><br><br>
-            <button type="submit">Analyze</button>
-        </form>
-
-        {% if report %}
-            <div class="result-box">
-                <h2>SEO Report:</h2>
-                <p>{{ report|replace('\n', '<br>')|safe }}</p>
-            </div>
-        {% endif %}
-    </div>
-</body>
-</html>
-"""
