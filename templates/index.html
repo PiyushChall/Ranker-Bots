@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-Agent SEO Agency</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Ranker-Bots, a multi-agent SEO agency</h1>
+        <form method="post" action="/analyze_seo">
+            <input type="url" name="url" placeholder="Enter URL to analyze" required><br><br>
+            <button type="submit">Analyze</button>
+        </form>
+
+        {% if report %}
+            <div class="result-box">
+                <h2>SEO Report:</h2>
+                <p>{{ report|replace('\n', '<br>')|safe }}</p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
