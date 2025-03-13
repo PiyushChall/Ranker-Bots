@@ -12,11 +12,45 @@
             <button type="submit">Analyze</button>
         </form>
 
-        {% if report %}
+        {% if url %}
             <div class="result-box">
-                <h2>SEO Report:</h2>
-                <p>{{ report|replace('\n', '<br>')|safe }}</p>
+                <h2>Keyword Analysis:</h2>
+                <p>{{ keyword_results|replace('\n', '<br>')|safe }}</p>
             </div>
+            <div class="result-box">
+                <h2>On-Page Analysis:</h2>
+                <p>{{ onpage_results|replace('\n', '<br>')|safe }}</p>
+            </div>
+            <div class="result-box">
+                <h2>Content Analysis:</h2>
+                <p>{{ content_results|replace('\n', '<br>')|safe }}</p>
+            </div>
+             <div class="result-box">
+                <h2>Technical SEO Analysis:</h2>
+                <p>{{ technical_results|replace('\n', '<br>')|safe }}</p>
+            </div>
+            <div class="result-box">
+                <h2>Link Building Analysis:</h2>
+                <p>{{ link_building_results|replace('\n', '<br>')|safe }}</p>
+            </div>
+        {% endif %}
+
+        {% if url %}
+            <label for="download_format">Download Report:</label>
+            <select name="download_format" id="download_format">
+                <option value="txt">Text (.txt)</option>
+                <option value="docx">Word (.docx)</option>
+            </select>
+            <a id="download_link" href="#">Download</a>
+
+            <script>
+                document.getElementById('download_format').addEventListener('change', function() {
+                    var url = "{{ url }}";
+                    var format = this.value;
+                    var downloadUrl = "/download_report?url=" + url + "&download_format=" + format;
+                    document.getElementById('download_link').href = downloadUrl;
+                });
+            </script>
         {% endif %}
     </div>
 </body>

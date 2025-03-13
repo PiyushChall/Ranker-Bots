@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import google.generativeai as genai
@@ -7,13 +7,9 @@ from dotenv import load_dotenv
 import os
 import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
+from urllib.parse import urljoin, urlparse
+import re  # Import the regular expression module
+from docx import Document  # Import python-docx
 
 load_dotenv()
 
@@ -24,12 +20,9 @@ templates = Jinja2Templates(directory="templates")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel('gemini-2.0-flash')
 
-'''
-# Configure Selenium
-chrome_options = Options()
-chrome_options.add_argument("--headless")  # Run Chrome in headless mode
-driver = webdriver.Chrome(options=chrome_options)
-'''
+def clean_text(text):
+    """Removes asterisks from the given text."""
+    return text.replace("*", "")
 
 class Agent:
     def __init__(self, name, description):
@@ -39,13 +32,11 @@ class Agent:
     def analyze(self, url):
         raise NotImplementedError
 
-
 class KeywordResearchAgent(Agent):
     def analyze(self, url):
-        prompt = f"Find relevant keywords for the following URL: {url}"
+        prompt = f"Find relevant keywords for the following URL: {url}. Describe the different types of keywords that are relevant (e.g., general keywords, long-tail keywords, etc.) and explain their importance for SEO."
         response = model.generate_content(prompt)
-        return response.text
-
+        return clean_text(response.text)
 
 class OnPageOptimizationAgent(Agent):
     def analyze(self, url):
@@ -57,78 +48,53 @@ class OnPageOptimizationAgent(Agent):
                 'name': 'description'}) else 'No description found'
             prompt = f"Analyze the following title: {title} and description: {description} for SEO."
             response = model.generate_content(prompt)
-            return response.text
+            return clean_text(response.text)
         except Exception as e:
             return f"Error analyzing on-page elements: {e}"
-
 
 class ContentAnalysisAgent(Agent):
     def analyze(self, url):
         try:
             response = requests.get(url)
             soup = BeautifulSoup(response.content, "html.parser")
-            # Extract all text from <p> tags
             content = ' '.join([p.get_text(strip=True) for p in soup.find_all('p')])
             prompt = f"Analyze the following website content for SEO and provide recommendations:\n\n{content}"
             response = model.generate_content(prompt)
-            return response.text
+            return clean_text(response.text)
         except Exception as e:
             return f"Error analyzing content: {e}"
 
-
 class TechnicalSEOAgent(Agent):
     def analyze(self, url):
-        '''
         try:
-            # Use Selenium to get the page source (for JavaScript rendering)
-            driver.get(url)
-            html_content = driver.page_source
-            soup = BeautifulSoup(html_content, "html.parser")
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, "html.parser")
 
-            # Check for SSL certificate
             ssl_certificate = "Present" if url.startswith("https://") else "Not present"
-
-            # Check for mobile-friendliness (basic check using viewport meta tag)
             viewport_meta = soup.find('meta', attrs={'name': 'viewport'})
             mobile_friendly = "Yes" if viewport_meta else "No"
 
-            # Check for sitemap.xml
             sitemap_url = f"{url.rstrip('/')}/sitemap.xml"
             sitemap_response = requests.get(sitemap_url)
             sitemap_present = "Present" if sitemap_response.status_code == 200 else "Not present"
 
-            # Check for broken links
             broken_links = []
             for link in soup.find_all('a'):
                 href = link.get('href')
-                if href and href.startswith('http'):
-                    try:
-                        response = requests.get(href)
-                        if response.status_code != 200:
-                            broken_links.append(href)
-                    except requests.exceptions.RequestException:
-                        broken_links.append(href)
+                if href:
+                    absolute_href = urljoin(url, href)
+                    parsed_href = urlparse(absolute_href)
+                    if parsed_href.scheme.startswith('http'):
+                        try:
+                            link_response = requests.head(absolute_href, allow_redirects=True)
+                            if link_response.status_code >= 400:
+                                broken_links.append(absolute_href)
+                        except requests.exceptions.RequestException:
+                            broken_links.append(absolute_href)
 
-            # Check for page speed (using Selenium to get performance timings)
-            navigation_start = driver.execute_script("return window.performance.timing.navigationStart")
-            dom_complete = driver.execute_script("return window.performance.timing.domComplete")
-            load_time = dom_complete - navigation_start
-            page_speed_score = "Good" if load_time < 3000 else "Needs improvement"
+            content_length = len(response.content)
+            page_speed_score = "Good" if content_length < 500000 else "Needs improvement"
 
-            # Example: Interacting with a button (if present)
-            try:
-                button = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "button"))
-                )
-                button.click()
-                time.sleep(2)  # Allow time for dynamic content to load.
-            except:
-                pass
-
-            # Example: Checking for specific elements
-            element_present = "Yes" if soup.find(id="some-element") else "No"
-
-            # Construct the prompt for Gemini
             prompt = f"""
                         Analyze the following technical SEO aspects of a website:
 
@@ -136,31 +102,23 @@ class TechnicalSEOAgent(Agent):
                         * Mobile-friendly: {mobile_friendly}
                         * Sitemap: {sitemap_present}
                         * Broken Links: {broken_links}
-                        * Page Speed Score: {page_speed_score} (Load time: {load_time} ms)
+                        * Page Speed Score: {page_speed_score} (Content length proxy)
 
                         Provide recommendations for improvement.
                         """
             response = model.generate_content(prompt)
-            return response.text
+            return clean_text(response.text)
 
         except Exception as e:
             return f"Error analyzing technical SEO: {e}"
-            '''
-        return "Link building analysis is not yet implemented."
-
 
 class LinkBuildingAgent(Agent):
     def analyze(self, url):
         try:
             response = requests.get(url)
             soup = BeautifulSoup(response.content, "html.parser")
-
-            # Extract relevant content for analysis (e.g., title, headings, keywords)
             title = soup.find('title').text if soup.find('title') else ""
             headings = [h.get_text(strip=True) for h in soup.find_all(['h1', 'h2', 'h3'])]
-            # You might need to use the KeywordResearchAgent here to get relevant keywords
-
-            # Construct the prompt for Gemini
             prompt = f"""
                     Suggest link building strategies for a website with the following characteristics:
 
@@ -169,16 +127,20 @@ class LinkBuildingAgent(Agent):
                     * URL: {url}
                     """
             response = model.generate_content(prompt)
-            return response.text
-
+            return clean_text(response.text)
         except Exception as e:
             return f"Error analyzing link building opportunities: {e}"
-
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+def generate_report_content(agent_results, url):
+    """Generates the report content as a string."""
+    report = f"SEO Analysis Report for {url}\n\n"
+    for agent_name, result in agent_results.items():
+        report += f"--- {agent_name} ---\n{result}\n\n"
+    return report
 
 @app.post("/analyze_seo")
 async def analyze_seo(request: Request, url: str = Form(...)):
@@ -188,27 +150,51 @@ async def analyze_seo(request: Request, url: str = Form(...)):
     technical_agent = TechnicalSEOAgent("Technical Agent", "Checks technical aspects")
     link_building_agent = LinkBuildingAgent("Link Building Agent", "Suggests link building strategies")
 
-    keyword_results = keyword_agent.analyze(url)
-    onpage_results = onpage_agent.analyze(url)
-    content_results = content_agent.analyze(url)
-    technical_results = technical_agent.analyze(url)
-    link_building_results = link_building_agent.analyze(url)
+    agent_results = {
+        "Keyword Agent": keyword_agent.analyze(url),
+        "On-Page Agent": onpage_agent.analyze(url),
+        "Content Agent": content_agent.analyze(url),
+        "Technical Agent": technical_agent.analyze(url),
+        "Link Building Agent": link_building_agent.analyze(url),
+    }
 
-    report = f"""
-    Keyword Analysis:
-    {keyword_results}
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "url": url,
+        "keyword_results": agent_results["Keyword Agent"],
+        "onpage_results": agent_results["On-Page Agent"],
+        "content_results": agent_results["Content Agent"],
+        "technical_results": agent_results["Technical Agent"],
+        "link_building_results": agent_results["Link Building Agent"],
+    })
 
-    On-Page Analysis:
-    {onpage_results}
+@app.get("/download_report")
+async def download_report(url: str, download_format: str):
+    """Handles the download request for the SEO report."""
+    keyword_agent = KeywordResearchAgent("Keyword Agent", "Finds keywords")
+    onpage_agent = OnPageOptimizationAgent("On-Page Agent", "Analyzes on-page elements")
+    content_agent = ContentAnalysisAgent("Content Agent", "Analyzes content")
+    technical_agent = TechnicalSEOAgent("Technical Agent", "Checks technical aspects")
+    link_building_agent = LinkBuildingAgent("Link Building Agent", "Suggests link building strategies")
 
-    Content Analysis:
-    {content_results}
+    agent_results = {
+        "Keyword Agent": keyword_agent.analyze(url),
+        "On-Page Agent": onpage_agent.analyze(url),
+        "Content Agent": content_agent.analyze(url),
+        "Technical Agent": technical_agent.analyze(url),
+        "Link Building Agent": link_building_agent.analyze(url),
+    }
 
-    Technical SEO Analysis:
-    {technical_results}
+    report_content = generate_report_content(agent_results, url)
 
-    Link Building Analysis:
-    {link_building_results}
-    """
-
-    return templates.TemplateResponse("index.html", {"request": request, "report": report, "url": url})
+    if download_format == "txt":
+        # Create a temporary file
+        with open("report.txt", "w") as f:
+            f.write(report_content)
+        return FileResponse("report.txt", filename="report.txt", media_type="text/plain")
+    elif download_format == "docx":
+        # Create a Word document
+        document = Document()
+        document.add_paragraph(report_content)
+        document.save("report.docx")
+        return FileResponse("report.docx", filename="report.docx", media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
