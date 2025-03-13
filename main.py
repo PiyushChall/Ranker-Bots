@@ -187,14 +187,23 @@ async def download_report(url: str, download_format: str):
 
     report_content = generate_report_content(agent_results, url)
 
+    # Extract the website name from the URL
+    parsed_url = urlparse(url)
+    netloc = parsed_url.netloc
+    # Remove "www." and potentially other subdomains
+    website_name = netloc.replace("www.", "").split(".")[0]
+
     if download_format == "txt":
         # Create a temporary file
-        with open("report.txt", "w") as f:
+        filename = f"{website_name}.txt"  # Use website name in filename
+        with open(filename, "w") as f:
             f.write(report_content)
-        return FileResponse("report.txt", filename="report.txt", media_type="text/plain")
+        return FileResponse(filename, filename=filename, media_type="text/plain")
     elif download_format == "docx":
         # Create a Word document
+        filename = f"{website_name}.docx"  # Use website name in filename
         document = Document()
-        document.add_paragraph(report_content)
-        document.save("report.docx")
-        return FileResponse("report.docx", filename="report.docx", media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        paragraph = document.add_paragraph()  # Add a paragraph
+        paragraph.add_run(report_content)  # Add all content as a single run
+        document.save(filename)
+        return FileResponse(filename, filename=filename, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")

@@ -9,7 +9,27 @@
         <h1>Welcome to Ranker-Bots, a multi-agent SEO agency</h1>
         <form method="post" action="/analyze_seo">
             <input type="url" name="url" placeholder="Enter URL to analyze" required><br><br>
-            <button type="submit">Analyze</button>
+            <div style="display: inline-block;">  <button type="submit">Analyze</button>
+            </div>
+            {% if url %}
+                <div style="display: inline-block;">
+                    <label for="download_format"></label>
+                    <select name="download_format" id="download_format">
+                        <option value="txt">Text (.txt)</option>
+                        <option value="docx">Word (.docx)</option>
+                    </select>
+                    <a id="download_link" href="#" style="
+                        padding: 10px 20px;
+                        background-color: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none; /* Remove underline */
+                        margin-left: 10px; /* Add spacing */
+                    ">Download</a>
+                </div>
+            {% endif %}
         </form>
 
         {% if url %}
@@ -34,24 +54,15 @@
                 <p>{{ link_building_results|replace('\n', '<br>')|safe }}</p>
             </div>
         {% endif %}
-
-        {% if url %}
-            <label for="download_format">Download Report:</label>
-            <select name="download_format" id="download_format">
-                <option value="txt">Text (.txt)</option>
-                <option value="docx">Word (.docx)</option>
-            </select>
-            <a id="download_link" href="#">Download</a>
-
-            <script>
-                document.getElementById('download_format').addEventListener('change', function() {
-                    var url = "{{ url }}";
-                    var format = this.value;
-                    var downloadUrl = "/download_report?url=" + url + "&download_format=" + format;
-                    document.getElementById('download_link').href = downloadUrl;
-                });
-            </script>
-        {% endif %}
     </div>
 </body>
 </html>
+
+<script>
+    document.getElementById('download_format').addEventListener('change', function() {
+        var url = "{{ url }}";
+        var format = this.value;
+        var downloadUrl = "/download_report?url=" + url + "&download_format=" + format;
+        document.getElementById('download_link').href = downloadUrl;
+    });
+</script>

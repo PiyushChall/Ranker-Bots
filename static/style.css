@@ -1,13 +1,20 @@
+/* style.css */
+
 body {
     font-family: sans-serif;
     margin: 0;
     padding: 0;
     background-color: #f4f4f4;
+    display: flex; /* Added for centering */
+    justify-content: center; /* Added for centering */
+    align-items: center; /* Added for centering */
+    min-height: 100vh; /* Added for centering */
 }
 
 h1 {
     text-align: center;
     margin-top: 20px;
+    color: #333; /* Added color */
 }
 
 form {
@@ -20,24 +27,32 @@ input[type="url"] {
     width: 300px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    box-sizing: border-box; /* Added box-sizing */
 }
 
-button {
-    padding: 10px 20px;
+button, a { /* Modified to include 'a' tag */
+    padding: 12px 25px; /* Increased padding */
     background-color: #007bff;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px; /* Increased border-radius */
     cursor: pointer;
+    font-size: 16px; /* Increased font-size */
+    transition: background-color 0.3s ease; /* Added transition */
+    text-decoration: none; /* Added to remove underline from links */
 }
 
-button:hover {
+button:hover, a:hover { /* Modified to include 'a' tag */
     background-color: #0056b3;
 }
 
 .container {
     width: 80%;
     margin: 20px auto;
+    background-color: white; /* Added background color */
+    padding: 20px; /* Added padding */
+    border-radius: 8px; /* Added border-radius */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Added box-shadow */
 }
 
 .result-box {
@@ -51,10 +66,12 @@ button:hover {
 
 .result-box h2 {
     margin-top: 0;
+    color: #333; /* Added color */
 }
 
 .result-box p {
     margin-bottom: 10px;
+    color: #555; /* Added color */
 }
 
 .result-box img {
@@ -70,7 +87,8 @@ button:hover {
     margin-bottom: 10px;
 }
 
-.result-box th, .result-box td {
+.result-box th,
+.result-box td {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: left;
@@ -78,4 +96,12 @@ button:hover {
 
 .result-box th {
     background-color: #f2f2f2;
+}
+
+select { /* Added select styles */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
 }
