@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import google.generativeai as genai
@@ -7,14 +7,12 @@ from dotenv import load_dotenv
 import os
 import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import json  # For storing metadata in JSON format
-import time
+from urllib.parse import urljoin, urlparse
+import re  # Import the regular expression module
+from docx import Document  # Import python-docx
+import pandas as pd
+import io
+import base64
 
 load_dotenv()
 
@@ -25,106 +23,9 @@ templates = Jinja2Templates(directory="templates")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel('gemini-2.0-flash')
 
-# Configure Selenium
-# chrome_options = Options()
-# chrome_options.add_argument("--headless")  # Run Chrome in headless mode
-# Make driver global so it can be used in the TechincalSEOAgent
-driver = webdriver.Chrome()
-
-def extract_file_metadata(file_path):
-    """Extracts basic metadata from a file."""
-    try:
-        metadata = {
-            "name": os.path.basename(file_path),
-            "path": file_path,
-            "size_bytes": os.path.getsize(file_path),
-            "created_time": os.path.getctime(file_path), # Creation time (platform-dependent)
-            "modified_time": os.path.getmtime(file_path),  # Last modified time
-            "accessed_time": os.path.getatime(file_path),   # Last accessed time
-        }
-        return metadata
-    except OSError as e:
-        print(f"Error getting metadata for {file_path}: {e}")
-        return None
-
-
-def analyze_web_page(url): #removed chromedriver_path to use global driver
-    """
-    Analyzes a web page, extracts key elements, and returns metadata.
-
-    Args:
-        url (str): The URL of the web page to analyze.
-
-    Returns:
-        dict: A dictionary containing:
-            - "url": The URL of the page.
-            - "title": The page title.
-            - "meta_tags": A list of dictionaries, each containing name/content attributes of meta tags.
-            - "headings": A list of all heading text (h1, h2, ..., h6).
-            - "links": A list of all links (href attributes).
-            - "metadata": The web page metadata
-    """
-    #driver = None  # Initialize driver outside the try block # Removed local driver to use global driver
-
-    try:
-        # --- WebDriver Setup ---
-        # if chromedriver_path: #Removed Chromedriver Path condition
-        #     service = ChromeService(executable_path=chromedriver_path)
-        #     driver = webdriver.Chrome(service=service)
-        # else:
-        #     # Try to use webdriver_manager (if installed) or assume ChromeDriver is in PATH
-        #     try:
-        #         from webdriver_manager.chrome import ChromeDriverManager
-        #         driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
-        #     except ImportError:
-        #         driver = webdriver.Chrome()  # Assumes ChromeDriver is in PATH # Removed Chrome driver setup
-
-
-        driver.get(url)
-
-        # --- Extract Metadata ---
-        page_metadata = {
-            "url": url,
-            "title": driver.title,
-            "meta_tags": [],
-            "headings": [],
-            "links": [],
-        }
-
-        # --- Extract Meta Tags ---
-        meta_elements = driver.find_elements(By.TAG_NAME, "meta")
-        for meta in meta_elements:
-            meta_data = {}
-            if meta.get_attribute("name"):
-                meta_data["name"] = meta.get_attribute("name")
-            if meta.get_attribute("content"):
-                meta_data["content"] = meta.get_attribute("content")
-            page_metadata["meta_tags"].append(meta_data)  # Append the dict
-
-        # --- Extract Headings (h1-h6) ---
-        for i in range(1, 7):
-            heading_elements = driver.find_elements(By.TAG_NAME, f"h{i}")  # f-string for dynamic tag names
-            for heading in heading_elements:
-                page_metadata["headings"].append(heading.text)
-
-        # --- Extract Links ---
-        link_elements = driver.find_elements(By.TAG_NAME, "a")
-        for link in link_elements:
-            href = link.get_attribute("href")
-            if href:  # Only add links with valid hrefs
-                page_metadata["links"].append(href)
-        page_metadata["metadata"] = extract_file_metadata(url) # Add Metadata of the web page
-
-        return page_metadata
-
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
-    # finally: #removed finally block to avoid closing browser for other agents
-    #     if driver:
-    #         driver.quit()  # Ensure the browser closes even if errors occur
-
+def clean_text(text):
+    """Removes asterisks from the given text."""
+    return text.replace("*", "")
 
 class Agent:
     def __init__(self, name, description):
@@ -134,13 +35,11 @@ class Agent:
     def analyze(self, url):
         raise NotImplementedError
 
-
 class KeywordResearchAgent(Agent):
     def analyze(self, url):
-        prompt = f"Find relevant keywords for the following URL: {url}"
+        prompt = f"Find relevant keywords for the following URL: {url}. Provide a table with columns 'Keyword', 'Search Volume', and 'Difficulty'. If data is not available, mention 'Not available'."
         response = model.generate_content(prompt)
         return response.text
-
 
 class OnPageOptimizationAgent(Agent):
     def analyze(self, url):
@@ -152,98 +51,77 @@ class OnPageOptimizationAgent(Agent):
                 'name': 'description'}) else 'No description found'
             prompt = f"Analyze the following title: {title} and description: {description} for SEO."
             response = model.generate_content(prompt)
-            return response.text
+            return clean_text(response.text)
         except Exception as e:
             return f"Error analyzing on-page elements: {e}"
-
 
 class ContentAnalysisAgent(Agent):
     def analyze(self, url):
         try:
             response = requests.get(url)
             soup = BeautifulSoup(response.content, "html.parser")
-            # Extract all text from <p> tags
             content = ' '.join([p.get_text(strip=True) for p in soup.find_all('p')])
             prompt = f"Analyze the following website content for SEO and provide recommendations:\n\n{content}"
             response = model.generate_content(prompt)
-            return response.text
+            return clean_text(response.text)
         except Exception as e:
             return f"Error analyzing content: {e}"
 
-
-class TechnicalSEOAgent(Agent):  # Modified this class to integrate the analyze_web_page function
+class TechnicalSEOAgent(Agent):
     def analyze(self, url):
         try:
-            # Use Selenium and the analyze_web_page function to get comprehensive data
-            page_data = analyze_web_page(url)  # Call the analyze_web_page function
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, "html.parser")
 
-            if not page_data:
-                return "Failed to retrieve page data for technical SEO analysis."
-
-            # Extract relevant data from page_data
             ssl_certificate = "Present" if url.startswith("https://") else "Not present"
-            mobile_friendly = "Yes" if any(
-                meta.get("name") == "viewport" for meta in page_data["meta_tags"]
-            ) else "No"
+            viewport_meta = soup.find('meta', attrs={'name': 'viewport'})
+            mobile_friendly = "Yes" if viewport_meta else "No"
+
             sitemap_url = f"{url.rstrip('/')}/sitemap.xml"
             sitemap_response = requests.get(sitemap_url)
             sitemap_present = "Present" if sitemap_response.status_code == 200 else "Not present"
 
-            # --- Broken Links Check (Simplified) ---
             broken_links = []
-            for link in page_data["links"]:
-                if link and link.startswith('http'):
-                    try:
-                        response = requests.get(link)
-                        if response.status_code != 200:
-                            broken_links.append(link)
-                    except requests.exceptions.RequestException:
-                        broken_links.append(link)
+            for link in soup.find_all('a'):
+                href = link.get('href')
+                if href:
+                    absolute_href = urljoin(url, href)
+                    parsed_href = urlparse(absolute_href)
+                    if parsed_href.scheme.startswith('http'):
+                        try:
+                            link_response = requests.head(absolute_href, allow_redirects=True)
+                            if link_response.status_code >= 400:
+                                broken_links.append(absolute_href)
+                        except requests.exceptions.RequestException:
+                            broken_links.append(absolute_href)
 
-            # Page Speed Check (Simplified, can be enhanced with more sophisticated metrics)
-            navigation_start = driver.execute_script("return window.performance.timing.navigationStart")
-            dom_complete = driver.execute_script("return window.performance.timing.domComplete")
-            load_time = dom_complete - navigation_start
-            page_speed_score = "Good" if load_time < 3000 else "Needs improvement"
-            # -- Metadata check
-            metadata = page_data["metadata"]
+            content_length = len(response.content)
+            page_speed_score = "Good" if content_length < 500000 else "Needs improvement"
 
-            # Construct the prompt for Gemini, including comprehensive data
             prompt = f"""
-            Analyze the following technical SEO aspects of a website based on extracted data:
+                        Analyze the following technical SEO aspects of a website:
 
-            * URL: {page_data["url"]}
-            * Title: {page_data["title"]}
-            * Meta Tags: {page_data["meta_tags"]}
-            * Headings: {page_data["headings"]}
-            * Links: {page_data["links"]}
-            * SSL Certificate: {ssl_certificate}
-            * Mobile-friendly: {mobile_friendly}
-            * Sitemap: {sitemap_present}
-            * Broken Links: {broken_links}
-            * Page Speed Score: {page_speed_score} (Load time: {load_time} ms)
-            *Metadata:{metadata}
-            Provide recommendations for improvement, focusing on the extracted metadata and technical aspects.
-            """
+                        * SSL Certificate: {ssl_certificate}
+                        * Mobile-friendly: {mobile_friendly}
+                        * Sitemap: {sitemap_present}
+                        * Broken Links: {broken_links}
+                        * Page Speed Score: {page_speed_score} (Content length proxy)
+
+                        Provide recommendations for improvement.
+                        """
             response = model.generate_content(prompt)
-            return response.text
+            return clean_text(response.text)
 
         except Exception as e:
             return f"Error analyzing technical SEO: {e}"
-
 
 class LinkBuildingAgent(Agent):
     def analyze(self, url):
         try:
             response = requests.get(url)
             soup = BeautifulSoup(response.content, "html.parser")
-
-            # Extract relevant content for analysis (e.g., title, headings, keywords)
             title = soup.find('title').text if soup.find('title') else ""
             headings = [h.get_text(strip=True) for h in soup.find_all(['h1', 'h2', 'h3'])]
-            # You might need to use the KeywordResearchAgent here to get relevant keywords
-
-            # Construct the prompt for Gemini
             prompt = f"""
                     Suggest link building strategies for a website with the following characteristics:
 
@@ -252,16 +130,39 @@ class LinkBuildingAgent(Agent):
                     * URL: {url}
                     """
             response = model.generate_content(prompt)
-            return response.text
-
+            return clean_text(response.text)
         except Exception as e:
             return f"Error analyzing link building opportunities: {e}"
 
+class GraphGeneratorAgent(Agent):
+    def analyze(self, df):
+        try:
+            import altair as alt
+
+            chart = alt.Chart(df).mark_bar().encode(
+                x=alt.X('Keyword', sort='-y'),
+                y='Search Volume'
+            ).properties(
+                title='Keyword Search Volume'
+            ).interactive()
+
+            # Save the chart as a JSON file
+            chart_json = chart.to_json()
+            return chart_json
+
+        except Exception as e:
+            return f"Error generating graph: {e}"
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+def generate_report_content(agent_results, url):
+    """Generates the report content as a string."""
+    report = f"SEO Analysis Report for {url}\n\n"
+    for agent_name, result in agent_results.items():
+        report += f"--- {agent_name} ---\n{result}\n\n"
+    return report
 
 @app.post("/analyze_seo")
 async def analyze_seo(request: Request, url: str = Form(...)):
@@ -270,33 +171,83 @@ async def analyze_seo(request: Request, url: str = Form(...)):
     content_agent = ContentAnalysisAgent("Content Agent", "Analyzes content")
     technical_agent = TechnicalSEOAgent("Technical Agent", "Checks technical aspects")
     link_building_agent = LinkBuildingAgent("Link Building Agent", "Suggests link building strategies")
+    graph_agent = GraphGeneratorAgent("Graph Agent", "Generates graphs from data")
 
     keyword_results = keyword_agent.analyze(url)
+    keyword_data = keyword_results.split('\n')
+    keywords = []
+    volumes = []
+    difficulties = []
+
+    for i in range(1, len(keyword_data)):
+        try:
+            row_data = keyword_data[i].split('|')
+            if len(row_data) == 3:
+                keyword = row_data[0].strip()
+                volume = row_data[1].strip()
+                difficulty = row_data[2].strip()
+                keywords.append(keyword)
+                volumes.append(volume)
+                difficulties.append(difficulty)
+        except IndexError:
+            print(f"IndexError at line: {keyword_data[i]}")
+        except ValueError:
+            print(f"ValueError at line: {keyword_data[i]}")
+
+    keyword_df = pd.DataFrame({
+        'Keyword': keywords,
+        'Search Volume': volumes,
+        'Difficulty': difficulties
+    })
+    keyword_table = keyword_df.to_html(index=False)
+    keyword_plot = graph_agent.analyze(keyword_df)
+
     onpage_results = onpage_agent.analyze(url)
     content_results = content_agent.analyze(url)
     technical_results = technical_agent.analyze(url)
     link_building_results = link_building_agent.analyze(url)
 
-    report = f"""
-    Keyword Analysis:
-    {keyword_results}
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "url": url,
+        "keyword_results": keyword_results,
+        "keyword_table": keyword_table,
+        "keyword_plot": keyword_plot,
+        "onpage_results": onpage_results,
+        "content_results": content_results,
+        "technical_results": technical_results,
+        "link_building_results": link_building_results,
+    })
 
-    On-Page Analysis:
-    {onpage_results}
+@app.get("/download_report")
+async def download_report(url: str):  # Removed download_format parameter
+    """Handles the download request for the SEO report."""
+    keyword_agent = KeywordResearchAgent("Keyword Agent", "Finds keywords")
+    onpage_agent = OnPageOptimizationAgent("On-Page Agent", "Analyzes on-page elements")
+    content_agent = ContentAnalysisAgent("Content Agent", "Analyzes content")
+    technical_agent = TechnicalSEOAgent("Technical Agent", "Checks technical aspects")
+    link_building_agent = LinkBuildingAgent("Link Building Agent", "Suggests link building strategies")
 
-    Content Analysis:
-    {content_results}
+    agent_results = {
+        "Keyword Agent": keyword_agent.analyze(url),
+        "On-Page Agent": onpage_agent.analyze(url),
+        "Content Agent": content_agent.analyze(url),
+        "Technical Agent": technical_agent.analyze(url),
+        "Link Building Agent": link_building_agent.analyze(url),
+    }
 
-    Technical SEO Analysis:
-    {technical_results}
+    report_content = generate_report_content(agent_results, url)
 
-    Link Building Analysis:
-    {link_building_results}
-    """
+    # Extract the website name from the URL
+    parsed_url = urlparse(url)
+    netloc = parsed_url.netloc
+    # Remove "www." and potentially other subdomains
+    website_name = netloc.replace("www.", "").split(".")[0]
 
-    return templates.TemplateResponse("index.html", {"request": request, "report": report, "url": url})
-
-# after all the agents performed their task quit the driver
-@app.on_event("shutdown")
-async def shutdown_event():
-    driver.quit()
+    # Create a Word document
+    filename = f"{website_name}.docx"  # Use website name in filename
+    document = Document()
+    paragraph = document.add_paragraph()  # Add a paragraph
+    paragraph.add_run(report_content)  # Add all content as a single run
+    document.save(filename)
+    return FileResponse(filename, filename=filename, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")

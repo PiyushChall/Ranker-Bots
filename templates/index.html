@@ -1,68 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Multi-Agent SEO Agency</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO Analysis Tool</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Welcome to Ranker-Bots, a multi-agent SEO agency</h1>
-        <form method="post" action="/analyze_seo">
-            <input type="url" name="url" placeholder="Enter URL to analyze" required><br><br>
-            <div style="display: inline-block;">  <button type="submit">Analyze</button>
-            </div>
-            {% if url %}
-                <div style="display: inline-block;">
-                    <label for="download_format"></label>
-                    <select name="download_format" id="download_format">
-                        <option value="txt">Text (.txt)</option>
-                        <option value="docx">Word (.docx)</option>
-                    </select>
-                    <a id="download_link" href="#" style="
-                        padding: 10px 20px;
-                        background-color: #007bff;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        text-decoration: none; /* Remove underline */
-                        margin-left: 10px; /* Add spacing */
-                    ">Download</a>
-                </div>
-            {% endif %}
+        <h1>SEO Analysis Tool</h1>
+        <form action="/analyze_seo" method="post">
+            <label for="url">Enter URL:</label>
+            <input type="url" id="url" name="url" required>
+            <button type="submit">Analyze</button>
         </form>
 
         {% if url %}
-            <div class="result-box">
-                <h2>Keyword Analysis:</h2>
-                <p>{{ keyword_results|replace('\n', '<br>')|safe }}</p>
+        <div class="results">
+            <h2>Analysis Results for {{ url }}</h2>
+
+            <div class="agent-result">
+                <h3>Keyword Analysis</h3>
+                <p>{{ keyword_results }}</p>
             </div>
-            <div class="result-box">
-                <h2>On-Page Analysis:</h2>
-                <p>{{ onpage_results|replace('\n', '<br>')|safe }}</p>
+
+            <div class="agent-result">
+                <h3>On-Page Optimization Analysis</h3>
+                <p>{{ onpage_results }}</p>
             </div>
-            <div class="result-box">
-                <h2>Content Analysis:</h2>
-                <p>{{ content_results|replace('\n', '<br>')|safe }}</p>
+
+            <div class="agent-result">
+                <h3>Content Analysis</h3>
+                <p>{{ content_results }}</p>
             </div>
-             <div class="result-box">
-                <h2>Technical SEO Analysis:</h2>
-                <p>{{ technical_results|replace('\n', '<br>')|safe }}</p>
+
+            <div class="agent-result">
+                <h3>Technical SEO Analysis</h3>
+                <p>{{ technical_results }}</p>
             </div>
-            <div class="result-box">
-                <h2>Link Building Analysis:</h2>
-                <p>{{ link_building_results|replace('\n', '<br>')|safe }}</p>
+
+            <div class="agent-result">
+                <h3>Link Building Analysis</h3>
+                <p>{{ link_building_results }}</p>
             </div>
+
+            <div class="download-section">
+                <p>Download Report:</p>
+                <a href="/download_report?url={{ url }}&download_format=txt" class="download-button">Download as TXT</a>
+                <a href="/download_report?url={{ url }}&download_format=docx" class="download-button">Download as DOCX</a>
+            </div>
+
+        </div>
         {% endif %}
     </div>
 </body>
 </html>
-
-<script>
-    document.getElementById('download_format').addEventListener('change', function() {
-        var url = "{{ url }}";
-        var format = this.value;
-        var downloadUrl = "/download_report?url=" + url + "&download_format=" + format;
-        document.getElementById('download_link').href = downloadUrl;
-    });
-</script>

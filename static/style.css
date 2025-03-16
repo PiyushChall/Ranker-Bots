@@ -1,107 +1,100 @@
-/* style.css */
-
+/* static/style.css */
 body {
     font-family: sans-serif;
     margin: 0;
     padding: 0;
     background-color: #f4f4f4;
-    display: flex; /* Added for centering */
-    justify-content: center; /* Added for centering */
-    align-items: center; /* Added for centering */
-    min-height: 100vh; /* Added for centering */
-}
-
-h1 {
-    text-align: center;
-    margin-top: 20px;
-    color: #333; /* Added color */
-}
-
-form {
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-input[type="url"] {
-    padding: 10px;
-    width: 300px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box; /* Added box-sizing */
-}
-
-button, a { /* Modified to include 'a' tag */
-    padding: 12px 25px; /* Increased padding */
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 6px; /* Increased border-radius */
-    cursor: pointer;
-    font-size: 16px; /* Increased font-size */
-    transition: background-color 0.3s ease; /* Added transition */
-    text-decoration: none; /* Added to remove underline from links */
-}
-
-button:hover, a:hover { /* Modified to include 'a' tag */
-    background-color: #0056b3;
+    color: #333;
 }
 
 .container {
     width: 80%;
+    max-width: 900px;
     margin: 20px auto;
-    background-color: white; /* Added background color */
-    padding: 20px; /* Added padding */
-    border-radius: 8px; /* Added border-radius */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Added box-shadow */
-}
-
-.result-box {
-    background-color: white;
-    border: 1px solid #ddd;
-    border-radius: 4px;
     padding: 20px;
-    margin-bottom: 20px;
+    background-color: #fff;
+    border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.result-box h2 {
-    margin-top: 0;
-    color: #333; /* Added color */
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #007bff;
 }
 
-.result-box p {
-    margin-bottom: 10px;
-    color: #555; /* Added color */
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
 }
 
-.result-box img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin-top: 10px;
+label {
+    margin-bottom: 5px;
+    font-weight: bold;
 }
 
-.result-box table {
+input[type="url"] {
     width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 10px;
-}
-
-.result-box th,
-.result-box td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-
-.result-box th {
-    background-color: #f2f2f2;
-}
-
-select { /* Added select styles */
     padding: 10px;
-    border: 1px solid #ccc;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
     border-radius: 4px;
-    font-size: 14px;
+    box-sizing: border-box;
+}
+
+button[type="submit"] {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
+}
+
+button[type="submit"]:hover {
+    background-color: #0056b3;
+}
+
+.results {
+    margin-top: 20px;
+}
+
+.agent-result {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+
+.agent-result h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.download-section {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.download-button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #28a745;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    margin: 5px;
+}
+
+.download-button:hover {
+    background-color: #218838;
+}
+
+@media (max-width: 600px) {
+    .container {
+        width: 95%;
+    }
 }
